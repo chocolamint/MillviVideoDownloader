@@ -1,4 +1,5 @@
 ﻿using System;
+using Microsoft.Extensions.Configuration;
 
 namespace MillviVideoDownloader
 {
@@ -6,7 +7,9 @@ namespace MillviVideoDownloader
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
+
+            var url = config["loginPageUrl"];
         }
     }
 }
