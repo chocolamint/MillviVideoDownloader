@@ -19,6 +19,7 @@ namespace MillviVideoDownloader
             var client = new ServiceClient(serviceOption);
 
             await client.LoginAsync(userId, password);
+            var videos = await client.GetVideoAsync();
         }
     }
 }

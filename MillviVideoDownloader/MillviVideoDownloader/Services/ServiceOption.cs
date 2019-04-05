@@ -5,13 +5,15 @@ namespace MillviVideoDownloader.Services
 {
     public class ServiceOption
     {
-        public Uri LoginPageUrl { get; set; }
+        public Uri LoginPageUri { get; set; }
+        public Uri VideoPageUri { get; set; }
 
         public static ServiceOption FromConfiguration(IConfiguration config)
         {
             return new ServiceOption
             {
-                LoginPageUrl = new Uri(config["loginPageUrl"])
+                LoginPageUri = new Uri(config["loginPageUrl"]),
+                VideoPageUri = new Uri(config["videoPageUrl"])
             };
         }
     }
