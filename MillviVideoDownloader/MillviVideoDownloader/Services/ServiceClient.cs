@@ -1,6 +1,9 @@
-﻿using System.Net.Http;
+﻿using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using AngleSharp.Common;
+using AngleSharp.Html.Parser;
 
 namespace MillviVideoDownloader.Services
 {
@@ -8,6 +11,7 @@ namespace MillviVideoDownloader.Services
     {
         private readonly ServiceOption _option;
         private readonly HttpClient _httpClient;
+        private readonly HtmlParser _htmlParser = new HtmlParser();
 
         public ServiceClient(ServiceOption option)
         : this(option, new HttpClientHandler { UseCookies = true })
@@ -26,6 +30,11 @@ namespace MillviVideoDownloader.Services
         {
             var response = await _httpClient.GetAsync(_option.LoginPageUrl, cancellationToken);
             var html = await response.Content.ReadAsStringAsync();
+            var doc = await _htmlParser.ParseDocumentAsync(html, cancellationToken);
+            var form = doc.QuerySelector("form");
+            var @params = form.QuerySelectorAll("input,select,textarea")
+                              .Where(x => x.Attributes["name"] != null)
+                              .ToDictionary(x => x.Attributes["name"].Value, x => x.Attributes["value"]?.Value);
         }
     }
 }
