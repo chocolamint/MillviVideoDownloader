@@ -1,8 +1,10 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using AngleSharp.Common;
+using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 
 namespace MillviVideoDownloader.Services
@@ -34,7 +36,44 @@ namespace MillviVideoDownloader.Services
             var form = doc.QuerySelector("form");
             var @params = form.QuerySelectorAll("input,select,textarea")
                               .Where(x => x.Attributes["name"] != null)
-                              .ToDictionary(x => x.Attributes["name"].Value, x => x.Attributes["value"]?.Value);
+                              .Select(x => ToKeyValuePair(x))
+                              .Select(x => FillAuthenticationInfo(x));
+
+            var postUri = new Uri(_option.LoginPageUrl, form.Attributes["action"].Value);
+
+            response = await _httpClient.PostAsync(postUri, new FormUrlEncodedContent(@params), cancellationToken);
+
+            response.EnsureSuccessStatusCode();
+
+            // TODO: Ensure login success.
+
+            KeyValuePair<string, string> FillAuthenticationInfo(KeyValuePair<string, string> param)
+            {
+                string value;
+                if (!string.IsNullOrEmpty(param.Value))
+                {
+                    value = param.Value;
+                }
+                else if (param.Key.Contains("user", StringComparison.OrdinalIgnoreCase))
+                {
+                    value = userId;
+                }
+                else if (param.Key.Contains("pass", StringComparison.OrdinalIgnoreCase))
+                {
+                    value = password;
+                }
+                else
+                {
+                    value = param.Value;
+                }
+
+                return new KeyValuePair<string, string>(param.Key, value);
+            }
+
+            KeyValuePair<string, string> ToKeyValuePair(IElement element)
+            {
+                return new KeyValuePair<string, string>(element.Attributes["name"].Value, element.Attributes["value"]?.Value);
+            }
         }
     }
 }
