@@ -95,7 +95,8 @@ namespace MillviVideoDownloader.Services
 
             return new VideoInfo
             {
-                PlaylistUri = new Uri(playlistUrl)
+                PlaylistUri = new Uri(playlistUrl),
+                FileName = _option.FileNameFormatRegex.Match(html).Result(_option.FileNameFormat)
             };
         }
 
