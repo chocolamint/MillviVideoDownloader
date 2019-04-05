@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 namespace MillviVideoDownloader.Services
 {
@@ -17,18 +19,20 @@ namespace MillviVideoDownloader.Services
         private static readonly Regex _paramRegex = new Regex(@"^[A-Za-z0-9_]+\((.+)\);$");
 
         private readonly ServiceOption _option;
+        private readonly IFfmpeg _ffmpeg;
         private readonly HttpClient _httpClient;
         private readonly HtmlParser _htmlParser = new HtmlParser();
 
-        public ServiceClient(ServiceOption option)
-        : this(option, new HttpClientHandler { UseCookies = true })
+        public ServiceClient(ServiceOption option, IFfmpeg ffmpeg)
+        : this(option, ffmpeg, new HttpClientHandler { UseCookies = true })
         {
 
         }
 
-        private ServiceClient(ServiceOption option, HttpMessageHandler httpMessageHandler)
+        private ServiceClient(ServiceOption option, IFfmpeg ffmpeg, HttpMessageHandler httpMessageHandler)
         {
             _option = option;
+            _ffmpeg = ffmpeg;
             _httpClient = new HttpClient(httpMessageHandler);
             _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36");
         }
@@ -90,17 +94,16 @@ namespace MillviVideoDownloader.Services
             var response = await _httpClient.GetAsync(_option.VideoPageUri, cancellationToken);
             var html = await response.Content.ReadAsStringAsync();
             var embedKey = _embedKeyRegex.Match(html).Groups[1].Value;
-            var contentId = await GetContentIdAsync(embedKey, _option.VideoPageUri, cancellationToken);
-            var playlistUrl = await GetPlaylistUrlAsync(contentId, cancellationToken);
+            var initResponse = await InitializeAsync(embedKey, _option.VideoPageUri, cancellationToken);
+            var playlistUrl = await GetPlaylistUrlAsync(initResponse, cancellationToken);
 
-            return new VideoInfo
+            return new VideoInfo(new Uri(playlistUrl), _httpClient, _ffmpeg)
             {
-                PlaylistUri = new Uri(playlistUrl),
                 FileName = _option.FileNameFormatRegex.Match(html).Result(_option.FileNameFormat)
             };
         }
 
-        private async Task<string> GetContentIdAsync(string embedKey, Uri referer, CancellationToken cancellationToken)
+        private async Task<InitResponse> InitializeAsync(string embedKey, Uri referer, CancellationToken cancellationToken)
         {
             var uri = $"https://cc.miovp.com/init?embedkey={Uri.EscapeUriString(embedKey)}&" +
                       "is_in_iframe=false&" +
@@ -114,19 +117,41 @@ namespace MillviVideoDownloader.Services
 
             var initJs = await response.Content.ReadAsStringAsync();
             var initJson = _paramRegex.Match(initJs).Groups[1].Value;
-            var contentId = JsonConvert.DeserializeAnonymousType(initJson, new { id_contents = default(string) }).id_contents;
-            return contentId;
+            var init = JsonConvert.DeserializeObject<InitResponse>(initJson);
+
+            return init;
         }
 
-        private async Task<string> GetPlaylistUrlAsync(string contentId, CancellationToken cancellationToken)
+        private async Task<string> GetPlaylistUrlAsync(InitResponse init, CancellationToken cancellationToken)
         {
-            var response = await _httpClient.GetAsync($"https://cc.miovp.com/get_info?host=rom-sharing&id_vhost=1&id_contents={contentId}&videotype=video&callback=Millvi012903781839485107_1553859772954", cancellationToken);
+            var url = $"https://cc.miovp.com/get_info?" +
+                      $"host={init.Host}&" +
+                      $"id_vhost={init.VhostId}" +
+                      $"&id_contents={init.ContentId}&" +
+                      $"videotype={init.VideoType}&" +
+                      $"callback=Millvi012903781839485107_1553859772954";
+            var response = await _httpClient.GetAsync(url, cancellationToken);
             var getInfoJs = await response.Content.ReadAsStringAsync();
 
             var getInfoJson = _paramRegex.Match(getInfoJs).Groups[1].Value;
 
             var playlistUrl = JsonConvert.DeserializeAnonymousType(getInfoJson, new { url = default(string) }).url;
             return playlistUrl;
+        }
+
+        private class InitResponse
+        {
+            [JsonProperty("host")]
+            public string Host { get; set; }
+
+            [JsonProperty("id_vhost")]
+            public int VhostId { get; set; }
+
+            [JsonProperty("videotype")]
+            public string VideoType { get; set; }
+
+            [JsonProperty("id_contents")]
+            public int ContentId { get; set; }
         }
     }
 }
