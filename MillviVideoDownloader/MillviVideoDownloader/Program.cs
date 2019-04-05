@@ -7,9 +7,13 @@ namespace MillviVideoDownloader
     {
         static void Main(string[] args)
         {
-            var config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
+            var config = new ConfigurationBuilder().AddCommandLine(args)
+                                                   .AddJsonFile("appsettings.json")
+                                                   .Build();
 
             var url = config["loginPageUrl"];
+            var userId = config["u"];
+            var password = config["p"];
         }
     }
 }
